@@ -5,7 +5,7 @@ jQuery(document).ready(function ($) {
     var $bar = $("#sanitization-bar");
     var $status = $("#sanitization-status");
 
-    $button.prop("disabled", true);
+    $button.prop("disabled", true).text("Sanitizing...");
     $progress.show();
 
     function runBatch(offset) {
@@ -18,26 +18,67 @@ jQuery(document).ready(function ($) {
           offset: offset,
         },
         success: function (response) {
-          $bar.val(response.progress);
-          $status.text(
-            "Processed " +
-              (offset + response.processed) +
-              " out of " +
-              response.total
+          if (response.success === false) {
+            handleError(response.data);
+            return;
+          }
+
+          var percentage = Math.round(response.progress);
+          $bar.css("width", percentage + "%");
+          $status.html(
+            "Processed <strong>" +
+              response.next_offset +
+              "</strong> out of <strong>" +
+              response.total +
+              "</strong> items (" +
+              percentage +
+              "%)"
           );
 
+          if (response.error_log.length > 0) {
+            $status.append(
+              "<br><strong>Warnings:</strong><br>" +
+                response.error_log.join("<br>")
+            );
+          }
+
           if (!response.done) {
-            runBatch(offset + response.processed);
+            runBatch(response.next_offset);
           } else {
-            $status.text("Sanitization completed!");
-            $button.prop("disabled", false);
+            $status.html(
+              "<strong>Sanitization completed successfully!</strong>"
+            );
+            if (response.error_log.length > 0) {
+              $status.append(
+                "<br><strong>Warnings:</strong><br>" +
+                  response.error_log.join("<br>")
+              );
+            }
+            $button.prop("disabled", false).text("Start Sanitization");
           }
         },
-        error: function () {
-          $status.text("An error occurred. Please try again.");
-          $button.prop("disabled", false);
+        error: function (jqXHR, textStatus, errorThrown) {
+          handleError({
+            message: "AJAX error: " + textStatus + " - " + errorThrown,
+            last_offset: offset,
+          });
         },
       });
+    }
+
+    function handleError(errorData) {
+      var errorMessage =
+        "An error occurred. Last processed offset: " + errorData.last_offset;
+      if (errorData.message) {
+        errorMessage += "<br>Error message: " + errorData.message;
+      }
+      if (errorData.error_log && errorData.error_log.length > 0) {
+        errorMessage +=
+          "<br><strong>Error log:</strong><br>" +
+          errorData.error_log.join("<br>");
+      }
+      $status.html("<strong class='error'>" + errorMessage + "</strong>");
+      $button.prop("disabled", false).text("Start Sanitization");
     }
 
     runBatch(0);

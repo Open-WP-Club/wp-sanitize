@@ -1,10 +1,16 @@
 <?php
-
-/**
- * Plugin Name: WP Data Sanitizer
- * Description: Sanitizes data for staging environments with various options and batching
- * Version: 2.0
- * Author: Your Name
+/*
+ * Plugin Name:             WP Data Sanitizer
+ * Plugin URI:              https://github.com/Open-WP-Club/wp-internal-linking
+ * Description:             Sanitizes data for staging environments with various options and batching
+ * Version:                 1.0.4
+ * Author:                  Open WP Club
+ * Author URI:              https://openwpclub.com
+ * License:                 GPL-2.0 License
+ * Requires Plugins:        
+ * Requires at least:       6.0
+ * Requires PHP:            7.4
+ * Tested up to:            6.6.1
  */
 
 if (!defined('ABSPATH')) exit; // Exit if accessed directly
@@ -13,6 +19,7 @@ class WP_Data_Sanitizer
 {
   private static $instance = null;
   private $options;
+  private $excluded_roles = array('administrator', 'editor', 'author', 'contributor', 'shop_manager');
 
   public static function get_instance()
   {
@@ -46,18 +53,34 @@ class WP_Data_Sanitizer
     $this->options = get_option('wp_data_sanitizer_options');
 ?>
     <div class="wrap">
-      <h1>WP Data Sanitizer</h1>
-      <form method="post" action="options.php">
-        <?php
-        settings_fields('wp_data_sanitizer_options_group');
-        do_settings_sections('wp-data-sanitizer-admin');
-        submit_button('Save Settings');
-        ?>
-      </form>
-      <button id="start-sanitization" class="button button-primary">Start Sanitization</button>
-      <div id="sanitization-progress" style="display:none;">
-        <progress id="sanitization-bar" value="0" max="100"></progress>
-        <p id="sanitization-status"></p>
+      <h1 class="wp-heading-inline">WP Data Sanitizer</h1>
+      <hr class="wp-header-end">
+
+      <div class="notice notice-warning">
+        <p><strong>Warning:</strong> This plugin will modify your database. Please make sure you have a backup before proceeding.</p>
+      </div>
+
+      <div class="card">
+        <h2 class="title">Sanitization Options</h2>
+        <form method="post" action="options.php">
+          <?php
+          settings_fields('wp_data_sanitizer_options_group');
+          do_settings_sections('wp-data-sanitizer-admin');
+          submit_button('Save Settings');
+          ?>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2 class="title">Run Sanitization</h2>
+        <p>Click the button below to start the sanitization process:</p>
+        <button id="start-sanitization" class="button button-primary">Start Sanitization</button>
+        <div id="sanitization-progress" style="display:none; margin-top: 20px;">
+          <div class="progress-bar-wrapper">
+            <div id="sanitization-bar"></div>
+          </div>
+          <p id="sanitization-status"></p>
+        </div>
       </div>
     </div>
 <?php
@@ -142,11 +165,12 @@ class WP_Data_Sanitizer
     if ('tools_page_wp-data-sanitizer' !== $hook) {
       return;
     }
-    wp_enqueue_script('wp-data-sanitizer-admin-js', plugins_url('admin.js', __FILE__), array('jquery'), '1.0', true);
+    wp_enqueue_script('wp-data-sanitizer-admin-js', plugins_url('admin.js', __FILE__), array('jquery'), '1.0.4', true);
     wp_localize_script('wp-data-sanitizer-admin-js', 'wpDataSanitizer', array(
       'ajax_url' => admin_url('admin-ajax.php'),
       'nonce' => wp_create_nonce('wp_data_sanitizer_nonce')
     ));
+    wp_enqueue_style('wp-data-sanitizer-admin-css', plugins_url('admin.css', __FILE__), array(), '1.0.4');
   }
 
   public function sanitize_batch()
@@ -164,65 +188,97 @@ class WP_Data_Sanitizer
 
     $total = 0;
     $processed = 0;
+    $error_log = array();
 
-    if ($options['sanitize_emails']) {
-      $total += $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->users}");
-      $users = $wpdb->get_results("SELECT ID, user_email FROM {$wpdb->users} LIMIT $offset, $batch_size");
-      foreach ($users as $user) {
-        $sanitized_email = md5($user->user_email) . '@example.com';
-        $wpdb->update($wpdb->users, array('user_email' => $sanitized_email), array('ID' => $user->ID));
-        $processed++;
+    try {
+      if ($options['sanitize_emails'] || $options['sanitize_usernames']) {
+        $total += $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->users}");
+        $users = $wpdb->get_results("SELECT ID, user_email FROM {$wpdb->users} LIMIT $offset, $batch_size");
+        foreach ($users as $user) {
+          $user_obj = new WP_User($user->ID);
+          $user_roles = $user_obj->roles;
+
+          $should_sanitize = !array_intersect($user_roles, $this->excluded_roles);
+
+          if ($should_sanitize) {
+            if ($options['sanitize_emails']) {
+              $sanitized_email = md5($user->user_email) . '@example.com';
+              $result = $wpdb->update($wpdb->users, array('user_email' => $sanitized_email), array('ID' => $user->ID));
+              if ($result === false) {
+                $error_log[] = "Failed to update email for user ID: " . $user->ID;
+              }
+            }
+
+            if ($options['sanitize_usernames']) {
+              $result = $wpdb->update(
+                $wpdb->users,
+                array('user_login' => 'user_' . $user->ID, 'display_name' => 'User ' . $user->ID),
+                array('ID' => $user->ID)
+              );
+              if ($result === false) {
+                $error_log[] = "Failed to update username for user ID: " . $user->ID;
+              }
+            }
+          } else {
+            $error_log[] = "Skipped sanitization for user ID: " . $user->ID . " (excluded role)";
+          }
+
+          $processed++;
+        }
       }
-    }
 
-    if ($options['sanitize_usernames']) {
-      if ($total == 0) $total += $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->users}");
-      $users = $wpdb->get_results("SELECT ID FROM {$wpdb->users} LIMIT $offset, $batch_size");
-      foreach ($users as $user) {
-        $wpdb->update(
-          $wpdb->users,
-          array('user_login' => 'user_' . $user->ID, 'display_name' => 'User ' . $user->ID),
-          array('ID' => $user->ID)
-        );
-        $processed++;
+      if ($options['sanitize_posts']) {
+        $total += $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts}");
+        $posts = $wpdb->get_results("SELECT ID FROM {$wpdb->posts} LIMIT $offset, $batch_size");
+        foreach ($posts as $post) {
+          $result = $wpdb->update(
+            $wpdb->posts,
+            array('post_content' => 'Sanitized content for post ' . $post->ID),
+            array('ID' => $post->ID)
+          );
+          if ($result === false) {
+            $error_log[] = "Failed to update content for post ID: " . $post->ID;
+          }
+          $processed++;
+        }
       }
-    }
 
-    if ($options['sanitize_posts']) {
-      $total += $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts}");
-      $posts = $wpdb->get_results("SELECT ID FROM {$wpdb->posts} LIMIT $offset, $batch_size");
-      foreach ($posts as $post) {
-        $wpdb->update(
-          $wpdb->posts,
-          array('post_content' => 'Sanitized content for post ' . $post->ID),
-          array('ID' => $post->ID)
-        );
-        $processed++;
+      if ($options['sanitize_comments']) {
+        $total += $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->comments}");
+        $comments = $wpdb->get_results("SELECT comment_ID FROM {$wpdb->comments} LIMIT $offset, $batch_size");
+        foreach ($comments as $comment) {
+          $result = $wpdb->update(
+            $wpdb->comments,
+            array('comment_content' => 'Sanitized comment ' . $comment->comment_ID),
+            array('comment_ID' => $comment->comment_ID)
+          );
+          if ($result === false) {
+            $error_log[] = "Failed to update content for comment ID: " . $comment->comment_ID;
+          }
+          $processed++;
+        }
       }
+
+      $progress = ($offset + $processed) / $total * 100;
+      $done = ($offset + $processed) >= $total;
+
+      wp_send_json(array(
+        'processed' => $processed,
+        'total' => $total,
+        'progress' => $progress,
+        'done' => $done,
+        'error_log' => $error_log,
+        'last_offset' => $offset,
+        'next_offset' => $offset + $processed
+      ));
+    } catch (Exception $e) {
+      wp_send_json_error(array(
+        'message' => $e->getMessage(),
+        'last_offset' => $offset,
+        'processed' => $processed,
+        'error_log' => $error_log
+      ));
     }
-
-    if ($options['sanitize_comments']) {
-      $total += $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->comments}");
-      $comments = $wpdb->get_results("SELECT comment_ID FROM {$wpdb->comments} LIMIT $offset, $batch_size");
-      foreach ($comments as $comment) {
-        $wpdb->update(
-          $wpdb->comments,
-          array('comment_content' => 'Sanitized comment ' . $comment->comment_ID),
-          array('comment_ID' => $comment->comment_ID)
-        );
-        $processed++;
-      }
-    }
-
-    $progress = ($offset + $processed) / $total * 100;
-    $done = ($offset + $processed) >= $total;
-
-    wp_send_json(array(
-      'processed' => $processed,
-      'total' => $total,
-      'progress' => $progress,
-      'done' => $done
-    ));
   }
 }
 
