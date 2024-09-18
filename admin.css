@@ -1,0 +1,21 @@
+.progress-bar-wrapper {
+  background-color: #e5e5e5;
+  height: 20px;
+  width: 100%;
+  margin-top: 10px;
+}
+
+#sanitization-bar {
+  background-color: #0073aa;
+  height: 100%;
+  width: 0%;
+  transition: width 0.5s ease-in-out;
+}
+
+#sanitization-status {
+  margin-top: 10px;
+}
+
+#sanitization-status .error {
+  color: #dc3232;
+}
