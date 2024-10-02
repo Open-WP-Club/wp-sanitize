@@ -3,7 +3,7 @@
  * Plugin Name:             WP Data Sanitizer
  * Plugin URI:              https://github.com/Open-WP-Club/wp-internal-linking
  * Description:             Sanitizes data for staging environments with various options and batching
- * Version:                 1.0.4
+ * Version:                 1.0.5
  * Author:                  Open WP Club
  * Author URI:              https://openwpclub.com
  * License:                 GPL-2.0 License
@@ -120,15 +120,6 @@ class WP_Data_Sanitizer
     );
 
     add_settings_field(
-      'sanitize_posts',
-      'Sanitize Post Content',
-      array($this, 'checkbox_callback'),
-      'wp-data-sanitizer-admin',
-      'wp_data_sanitizer_setting_section',
-      array('sanitize_posts')
-    );
-
-    add_settings_field(
       'sanitize_comments',
       'Sanitize Comments',
       array($this, 'checkbox_callback'),
@@ -143,7 +134,6 @@ class WP_Data_Sanitizer
     $new_input = array();
     $new_input['sanitize_emails'] = isset($input['sanitize_emails']) ? true : false;
     $new_input['sanitize_usernames'] = isset($input['sanitize_usernames']) ? true : false;
-    $new_input['sanitize_posts'] = isset($input['sanitize_posts']) ? true : false;
     $new_input['sanitize_comments'] = isset($input['sanitize_comments']) ? true : false;
     return $new_input;
   }
@@ -165,12 +155,12 @@ class WP_Data_Sanitizer
     if ('tools_page_wp-data-sanitizer' !== $hook) {
       return;
     }
-    wp_enqueue_script('wp-data-sanitizer-admin-js', plugins_url('admin.js', __FILE__), array('jquery'), '1.0.4', true);
+    wp_enqueue_script('wp-data-sanitizer-admin-js', plugins_url('admin.js', __FILE__), array('jquery'), '1.0.5', true);
     wp_localize_script('wp-data-sanitizer-admin-js', 'wpDataSanitizer', array(
       'ajax_url' => admin_url('admin-ajax.php'),
       'nonce' => wp_create_nonce('wp_data_sanitizer_nonce')
     ));
-    wp_enqueue_style('wp-data-sanitizer-admin-css', plugins_url('admin.css', __FILE__), array(), '1.0.4');
+    wp_enqueue_style('wp-data-sanitizer-admin-css', plugins_url('admin.css', __FILE__), array(), '1.0.5');
   }
 
   public function sanitize_batch()
@@ -223,22 +213,6 @@ class WP_Data_Sanitizer
             $error_log[] = "Skipped sanitization for user ID: " . $user->ID . " (excluded role)";
           }
 
-          $processed++;
-        }
-      }
-
-      if ($options['sanitize_posts']) {
-        $total += $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->posts}");
-        $posts = $wpdb->get_results("SELECT ID FROM {$wpdb->posts} LIMIT $offset, $batch_size");
-        foreach ($posts as $post) {
-          $result = $wpdb->update(
-            $wpdb->posts,
-            array('post_content' => 'Sanitized content for post ' . $post->ID),
-            array('ID' => $post->ID)
-          );
-          if ($result === false) {
-            $error_log[] = "Failed to update content for post ID: " . $post->ID;
-          }
           $processed++;
         }
       }

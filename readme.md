@@ -4,7 +4,7 @@ Keep your staging environment squeaky clean with WP Data Sanitizer – the ultim
 
 ## 🚀 Features
 
-- **Selective Sanitization**: Choose what to sanitize – emails, usernames, post content, or comments.
+- **Selective Sanitization**: Choose what to sanitize – emails, usernames, or comments.
 - **Role-Based Exclusions**: Automatically skip sanitization for important user roles.
 - **Batch Processing**: Handle large datasets with ease through efficient batch operations.
 - **User-Friendly Interface**: Intuitive admin panel seamlessly integrated into WordPress.
@@ -20,7 +20,7 @@ Keep your staging environment squeaky clean with WP Data Sanitizer – the ultim
 ## 📊 Usage
 
 1. In your WordPress admin panel, navigate to Tools > Data Sanitizer.
-2. Select the data types you want to sanitize.
+2. Select the data types you want to sanitize (emails, usernames, or comments).
 3. Click "Save Settings" to store your preferences.
 4. Hit "Start Sanitization" to begin the process.
 5. Monitor the progress bar and check the logs for details.
