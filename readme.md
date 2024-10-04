@@ -4,10 +4,11 @@ Keep your staging environment squeaky clean with WP Data Sanitizer – the ultim
 
 ## 🚀 Features
 
-- **Selective Sanitization**: Choose what to sanitize – emails, usernames, or comments.
+- **Selective Sanitization**: Choose what to sanitize – emails, usernames, post content, comments, or WooCommerce orders.
 - **Role-Based Exclusions**: Automatically skip sanitization for important user roles.
 - **Batch Processing**: Handle large datasets with ease through efficient batch operations.
 - **User-Friendly Interface**: Intuitive admin panel seamlessly integrated into WordPress.
+- **WooCommerce Support**: Sanitize order details when WooCommerce is active.
 
 ## 🛠 Installation
 
@@ -20,7 +21,7 @@ Keep your staging environment squeaky clean with WP Data Sanitizer – the ultim
 ## 📊 Usage
 
 1. In your WordPress admin panel, navigate to Tools > Data Sanitizer.
-2. Select the data types you want to sanitize (emails, usernames, or comments).
+2. Select the data types you want to sanitize (including WooCommerce orders if available).
 3. Click "Save Settings" to store your preferences.
 4. Hit "Start Sanitization" to begin the process.
 5. Monitor the progress bar and check the logs for details.
@@ -30,6 +31,7 @@ Keep your staging environment squeaky clean with WP Data Sanitizer – the ultim
 - **Always backup your database before running any sanitization process.**
 - This plugin modifies your database. Use with caution, especially in production environments.
 - Sanitized data is irreversible. Make sure you really want to modify your data before proceeding.
+- WooCommerce order sanitization is only available when WooCommerce is active.
 
 ## 🛡 Security
 

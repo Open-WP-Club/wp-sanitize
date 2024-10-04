@@ -2,8 +2,8 @@
 /*
  * Plugin Name:             WP Data Sanitizer
  * Plugin URI:              https://github.com/Open-WP-Club/wp-internal-linking
- * Description:             Sanitizes data for staging environments with various options and batching
- * Version:                 1.0.5
+ * Description:             Sanitizes data for staging environments with various options and batching, including WooCommerce orders
+ * Version:                 1.1.0
  * Author:                  Open WP Club
  * Author URI:              https://openwpclub.com
  * License:                 GPL-2.0 License
@@ -127,6 +127,17 @@ class WP_Data_Sanitizer
       'wp_data_sanitizer_setting_section',
       array('sanitize_comments')
     );
+
+    if ($this->is_woocommerce_active()) {
+      add_settings_field(
+        'sanitize_wc_orders',
+        'Sanitize WooCommerce Orders',
+        array($this, 'checkbox_callback'),
+        'wp-data-sanitizer-admin',
+        'wp_data_sanitizer_setting_section',
+        array('sanitize_wc_orders')
+      );
+    }
   }
 
   public function sanitize($input)
@@ -135,6 +146,7 @@ class WP_Data_Sanitizer
     $new_input['sanitize_emails'] = isset($input['sanitize_emails']) ? true : false;
     $new_input['sanitize_usernames'] = isset($input['sanitize_usernames']) ? true : false;
     $new_input['sanitize_comments'] = isset($input['sanitize_comments']) ? true : false;
+    $new_input['sanitize_wc_orders'] = isset($input['sanitize_wc_orders']) ? true : false;
     return $new_input;
   }
 
@@ -155,12 +167,12 @@ class WP_Data_Sanitizer
     if ('tools_page_wp-data-sanitizer' !== $hook) {
       return;
     }
-    wp_enqueue_script('wp-data-sanitizer-admin-js', plugins_url('admin.js', __FILE__), array('jquery'), '1.0.5', true);
+    wp_enqueue_script('wp-data-sanitizer-admin-js', plugins_url('assets/js/admin.js', __FILE__), array('jquery'), '1.1.0', true);
     wp_localize_script('wp-data-sanitizer-admin-js', 'wpDataSanitizer', array(
       'ajax_url' => admin_url('admin-ajax.php'),
       'nonce' => wp_create_nonce('wp_data_sanitizer_nonce')
     ));
-    wp_enqueue_style('wp-data-sanitizer-admin-css', plugins_url('admin.css', __FILE__), array(), '1.0.5');
+    wp_enqueue_style('wp-data-sanitizer-admin-css', plugins_url('assets/css/admin.css', __FILE__), array(), '1.1.0');
   }
 
   public function sanitize_batch()
@@ -233,6 +245,15 @@ class WP_Data_Sanitizer
         }
       }
 
+      if ($options['sanitize_wc_orders'] && $this->is_woocommerce_active()) {
+        $total += $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}wc_orders");
+        $orders = $wpdb->get_results("SELECT id FROM {$wpdb->prefix}wc_orders LIMIT $offset, $batch_size");
+        foreach ($orders as $order) {
+          $this->sanitize_wc_order($order->id);
+          $processed++;
+        }
+      }
+
       $progress = ($offset + $processed) / $total * 100;
       $done = ($offset + $processed) >= $total;
 
@@ -253,6 +274,45 @@ class WP_Data_Sanitizer
         'error_log' => $error_log
       ));
     }
+  }
+
+  private function sanitize_wc_order($order_id)
+  {
+    $order = wc_get_order($order_id);
+    if (!$order) {
+      return;
+    }
+
+    // Sanitize billing information
+    $order->set_billing_first_name('John');
+    $order->set_billing_last_name('Doe');
+    $order->set_billing_company('Example Company');
+    $order->set_billing_address_1('123 Main St');
+    $order->set_billing_address_2('');
+    $order->set_billing_city('Anytown');
+    $order->set_billing_state('CA');
+    $order->set_billing_postcode('12345');
+    $order->set_billing_country('US');
+    $order->set_billing_email('john.doe' . $order_id . '@example.com');
+    $order->set_billing_phone('555-123-4567');
+
+    // Sanitize shipping information
+    $order->set_shipping_first_name('Jane');
+    $order->set_shipping_last_name('Doe');
+    $order->set_shipping_company('Example Company');
+    $order->set_shipping_address_1('456 Elm St');
+    $order->set_shipping_address_2('');
+    $order->set_shipping_city('Othertown');
+    $order->set_shipping_state('NY');
+    $order->set_shipping_postcode('67890');
+    $order->set_shipping_country('US');
+
+    $order->save();
+  }
+
+  private function is_woocommerce_active()
+  {
+    return class_exists('WooCommerce');
   }
 }
 
